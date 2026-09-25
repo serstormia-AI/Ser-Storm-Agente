@@ -5,13 +5,15 @@ import { Sidebar } from '@/components/Sidebar';
 import { sendMessage, toggleAi, toggleAgentPaused, getConversations, getMessages, getLead, getAgency } from './actions';
 import { supabase } from '@/lib/supabase';
 import { SerstormConversation, SerstormMessage, SerstormLead, ENTITY_TYPE_LABELS, PIPELINE_STAGE_LABELS } from '@serstorm/shared';
-import { Bot, User, Send, CheckCheck, Clock, Sparkles } from 'lucide-react';
+import { Bot, User, Send, CheckCheck, Clock, Sparkles, QrCode } from 'lucide-react';
 
 export default function InboxPage() {
   const [conversations, setConversations] = useState<SerstormConversation[]>([]);
   const [selectedConv, setSelectedConv] = useState<SerstormConversation | null>(null);
   const [messages, setMessages] = useState<SerstormMessage[]>([]);
   const [lead, setLead] = useState<SerstormLead | null>(null);
+  const [agency, setAgency] = useState<any>(null);
+  const [showQrModal, setShowQrModal] = useState(true);
   const [inputMessage, setInputMessage] = useState('');
   const [agentPaused, setAgentPaused] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -27,9 +29,10 @@ export default function InboxPage() {
         }
       }
 
-      const agency = await getAgency('serstorm');
-      if (agency) {
-        setAgentPaused(!!agency.agent_paused);
+      const ag = await getAgency('serstorm');
+      if (ag) {
+        setAgency(ag);
+        setAgentPaused(!!ag.agent_paused);
       }
       setLoading(false);
     }
@@ -106,9 +109,55 @@ export default function InboxPage() {
     await toggleAgentPaused('00000000-0000-0000-0000-000000000001', newStatus);
   };
 
+  const connectionStatus = agency?.connection_status || agency?.business_hours?.connection_status || 'disconnected';
+  const qrCode = agency?.qr_code || agency?.business_hours?.whatsapp_qr;
+
   return (
-    <div className="flex h-screen bg-slate-950 overflow-hidden">
-      <Sidebar agentPaused={agentPaused} onTogglePause={handleTogglePause} />
+    <div className="flex h-screen bg-slate-950 overflow-hidden relative">
+      <Sidebar
+        agentPaused={agentPaused}
+        onTogglePause={handleTogglePause}
+        connectionStatus={connectionStatus}
+        onOpenQrModal={() => setShowQrModal(true)}
+      />
+
+      {/* WhatsApp QR Modal Overlay if QR is pending */}
+      {connectionStatus === 'qr_pending' && qrCode && showQrModal && (
+        <div className="fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-indigo-500/40 rounded-2xl max-w-md w-full p-6 text-center shadow-2xl space-y-4">
+            <div className="w-12 h-12 bg-indigo-600/20 text-indigo-400 rounded-full flex items-center justify-center mx-auto border border-indigo-500/30">
+              <QrCode className="w-6 h-6" />
+            </div>
+            <div>
+              <h3 className="text-lg font-bold text-slate-100">Vincular WhatsApp de SerStorm</h3>
+              <p className="text-xs text-slate-400 mt-1.5 leading-relaxed">
+                Abrí WhatsApp en el celular comercial de SerStorm ➔ <strong>Dispositivos Vinculados</strong> ➔ <strong>Vincular Dispositivo</strong> y escaneá este código QR:
+              </p>
+            </div>
+
+            <div className="bg-white p-3 rounded-2xl inline-block shadow-inner mx-auto">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={qrCode}
+                alt="Código QR de WhatsApp"
+                className="w-64 h-64 mx-auto rounded-lg"
+              />
+            </div>
+
+            <p className="text-[11px] text-indigo-300 animate-pulse font-medium">
+              ⏳ Esperando escaneo... (Esta pantalla se cerrará sola al conectar).
+            </p>
+
+            <button
+              type="button"
+              onClick={() => setShowQrModal(false)}
+              className="text-xs text-slate-400 hover:text-slate-200 transition-colors underline pt-1 block mx-auto"
+            >
+              Cerrar y ver CRM
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Conversations List Column */}
       <section className="w-80 border-r border-slate-800 bg-slate-900/60 flex flex-col">
@@ -171,6 +220,27 @@ export default function InboxPage() {
               </div>
 
               <div className="flex items-center space-x-3">
+                {connectionStatus === 'connected' ? (
+                  <span className="flex items-center space-x-1.5 text-xs text-emerald-400 bg-emerald-950/60 border border-emerald-800/40 px-2.5 py-1 rounded-full">
+                    <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                    <span>WhatsApp Conectado (24/7)</span>
+                  </span>
+                ) : connectionStatus === 'qr_pending' ? (
+                  <button
+                    type="button"
+                    onClick={() => setShowQrModal(true)}
+                    className="flex items-center space-x-1.5 text-xs text-amber-400 bg-amber-950/60 border border-amber-800/40 px-2.5 py-1 rounded-full hover:bg-amber-900/40 transition-colors"
+                  >
+                    <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
+                    <span>Escanear Código QR</span>
+                  </button>
+                ) : (
+                  <span className="flex items-center space-x-1.5 text-xs text-slate-400 bg-slate-800/60 border border-slate-700/40 px-2.5 py-1 rounded-full">
+                    <span className="w-2 h-2 rounded-full bg-slate-500" />
+                    <span>WhatsApp Inactivo</span>
+                  </span>
+                )}
+
                 <button
                   onClick={handleToggleAi}
                   className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${

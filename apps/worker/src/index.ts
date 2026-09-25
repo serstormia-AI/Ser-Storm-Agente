@@ -6,7 +6,8 @@ import makeWASocket, {
   proto,
 } from '@whiskeysockets/baileys';
 import { Boom } from '@hapi/boom';
-import qrcode from 'qrcode-terminal';
+import qrcodeTerminal from 'qrcode-terminal';
+import { toDataURL } from 'qrcode';
 import pino from 'pino';
 import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
@@ -72,21 +73,64 @@ async function startBaileysWorker() {
 
   sock.ev.on('creds.update', saveCreds);
 
-  sock.ev.on('connection.update', (update) => {
+  async function updateAgencyConnection(status: 'qr_pending' | 'connected' | 'disconnected', qrDataUrl: string | null = null) {
+    try {
+      // 1. Try dedicated columns
+      const { error } = await supabase
+        .from('agencies')
+        .update({ qr_code: qrDataUrl, connection_status: status })
+        .eq('id', agencyId);
+
+      if (error) {
+        // 2. Fallback to business_hours JSONB if columns don't exist yet
+        const { data: ag } = await supabase
+          .from('agencies')
+          .select('business_hours')
+          .eq('id', agencyId)
+          .single();
+        const currentBh = ag?.business_hours || {};
+        await supabase
+          .from('agencies')
+          .update({
+            business_hours: {
+              ...currentBh,
+              whatsapp_qr: qrDataUrl,
+              connection_status: status,
+            },
+          })
+          .eq('id', agencyId);
+      }
+      console.log(`[Worker] Estado de conexión actualizado: ${status}`);
+    } catch (err: any) {
+      console.error('[Worker] Error sincronizando estado de conexión:', err.message);
+    }
+  }
+
+  sock.ev.on('connection.update', async (update) => {
     const { connection, lastDisconnect, qr } = update;
 
     if (qr) {
       console.log('\n======================================================');
       console.log('  ESCANEÁ ESTE CÓDIGO QR CON EL WHATSAPP DE SERSTORM  ');
-      console.log('  (Dispositivos Vinculados -> Vincular Dispositivo)    ');
+      console.log('  (O escanéalo directo desde el Panel CRM en Vercel)  ');
       console.log('======================================================\n');
-      qrcode.generate(qr, { small: true });
+      qrcodeTerminal.generate(qr, { small: true });
+
+      try {
+        const dataUrl = await toDataURL(qr, { margin: 2, width: 320 });
+        await updateAgencyConnection('qr_pending', dataUrl);
+      } catch (e: any) {
+        console.error('[Worker QR Error]', e.message);
+      }
     }
 
     if (connection === 'close') {
       const statusCode = (lastDisconnect?.error as Boom)?.output?.statusCode;
       const shouldReconnect = statusCode !== DisconnectReason.loggedOut;
       console.log(`[Baileys] Connection closed (code: ${statusCode}). Reconnect: ${shouldReconnect}`);
+
+      await updateAgencyConnection('disconnected', null);
+
       if (shouldReconnect) {
         setTimeout(startBaileysWorker, 5000);
       } else {
@@ -94,6 +138,7 @@ async function startBaileysWorker() {
       }
     } else if (connection === 'open') {
       console.log('✅ [Baileys] ¡Conexión exitosa a WhatsApp! Modo Coexistencia Activo.');
+      await updateAgencyConnection('connected', null);
     }
   });
 

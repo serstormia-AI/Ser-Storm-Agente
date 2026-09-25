@@ -27,6 +27,8 @@ CREATE TABLE IF NOT EXISTS agencies (
         }
     }'::jsonb,
     agent_paused BOOLEAN DEFAULT FALSE,
+    qr_code TEXT,
+    connection_status TEXT DEFAULT 'disconnected',
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
