@@ -1,0 +1,20 @@
+{
+  "name": "serstorm-monorepo",
+  "version": "1.0.0",
+  "private": true,
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "dev:panel": "npm run dev --workspace=apps/panel",
+    "dev:worker": "npm run dev --workspace=apps/worker",
+    "build:panel": "npm run build --workspace=apps/panel",
+    "build:worker": "npm run build --workspace=apps/worker",
+    "build": "npm run build --workspace=packages/shared && npm run build:panel && npm run build:worker",
+    "typecheck": "npm run typecheck --workspaces --if-present"
+  },
+  "devDependencies": {
+    "typescript": "^5.4.5"
+  }
+}

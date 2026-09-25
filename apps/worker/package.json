@@ -1,0 +1,29 @@
+{
+  "name": "@serstorm/worker",
+  "version": "1.0.0",
+  "private": true,
+  "main": "src/index.ts",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "start": "tsx src/index.ts",
+    "build": "tsc",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.24.3",
+    "@serstorm/shared": "*",
+    "@supabase/supabase-js": "^2.43.4",
+    "@whiskeysockets/baileys": "^6.7.8",
+    "axios": "^1.7.2",
+    "dotenv": "^16.4.5",
+    "form-data": "^4.0.0",
+    "pino": "^8.20.0",
+    "qrcode-terminal": "^0.12.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.12.12",
+    "@types/qrcode-terminal": "^0.12.2",
+    "tsx": "^4.10.5",
+    "typescript": "^5.4.5"
+  }
+}

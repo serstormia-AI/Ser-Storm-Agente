@@ -1,0 +1,38 @@
+version: '3.8'
+
+services:
+  serstorm-worker:
+    build:
+      context: .
+      dockerfile: apps/worker/Dockerfile
+    container_name: serstorm-worker
+    restart: unless-stopped
+    volumes:
+      - serstorm_auth:/app/apps/worker/auth
+    environment:
+      - NODE_ENV=production
+      - SUPABASE_URL=${SUPABASE_URL}
+      - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - AGENCY_SLUG=serstorm
+      - AGENT_DEBOUNCE_MS=8000
+      - N8N_WEBHOOK_URL=${N8N_WEBHOOK_URL}
+
+  serstorm-panel:
+    build:
+      context: .
+      dockerfile: apps/panel/Dockerfile
+    container_name: serstorm-panel
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - NEXT_PUBLIC_SUPABASE_URL=${SUPABASE_URL}
+      - NEXT_PUBLIC_SUPABASE_ANON_KEY=${NEXT_PUBLIC_SUPABASE_ANON_KEY}
+      - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
+
+volumes:
+  serstorm_auth:
+    name: serstorm_auth_data

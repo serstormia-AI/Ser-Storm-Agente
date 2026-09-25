@@ -1,0 +1,13 @@
+node_modules/
+.next/
+dist/
+build/
+.env
+.env.local
+.env.*
+auth/
+apps/worker/auth/
+*.log
+.DS_Store
+*.tsbuildinfo
+.agents/

@@ -1,0 +1,114 @@
+{
+  "name": "SerStorm - Alertas de Leads y Auditorías",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "serstorm-events",
+        "responseMode": "onReceived",
+        "options": {}
+      },
+      "id": "1",
+      "name": "Webhook SerStorm Worker",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1.1,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "dataType": "string",
+        "value1": "={{ $json.body.event }}",
+        "rules": {
+          "rules": [
+            {
+              "value2": "lead_qualified"
+            },
+            {
+              "value2": "audit_booked"
+            },
+            {
+              "value2": "human_handoff"
+            }
+          ]
+        }
+      },
+      "id": "2",
+      "name": "Switch Evento",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 1,
+      "position": [480, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const data = $input.first().json.body;\nconst lead = data.lead || {};\nconst notes = data.metadata?.notes || '';\n\nconst text = `🔥 *NUEVO LEAD CALIFICADO - SERSTORM*\\n\\n` +\n  `👤 *Nombre:* ${lead.name || 'Sin nombre'}\\n` +\n  `🏨 *Empresa:* ${lead.company_name || 'No especificada'}\\n` +\n  `📱 *Teléfono:* ${lead.phone || 'N/A'}\\n` +\n  `📝 *Notas IA:* ${notes}\\n\\n` +\n  `👉 Ingresá al CRM para ver el chat.`;\n\nreturn [{ json: { text, lead, event: 'lead_qualified' } }];"
+      },
+      "id": "3",
+      "name": "Formatear Lead Calificado",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [720, 180]
+    },
+    {
+      "parameters": {
+        "jsCode": "const data = $input.first().json.body;\nconst lead = data.lead || {};\nconst datetime = data.metadata?.datetime || 'Por coordinar';\n\nconst text = `📅 *AUDITORÍA AGENDADA CON PABLO DIZ* 🚀\\n\\n` +\n  `👤 *Cliente:* ${lead.name || 'Sin nombre'}\\n` +\n  `🏨 *Empresa:* ${lead.company_name || 'N/A'}\\n` +\n  `📱 *WhatsApp:* ${lead.phone || 'N/A'}\\n` +\n  `⏰ *Horario:* ${datetime}\\n\\n` +\n  `✅ Preparar ficha técnica de pauta/SEO para la videollamada.`;\n\nreturn [{ json: { text, lead, event: 'audit_booked' } }];"
+      },
+      "id": "4",
+      "name": "Formatear Auditoría Agendada",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [720, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const data = $input.first().json.body;\nconst lead = data.lead || {};\nconst reason = data.metadata?.reason || 'Solicitud de cliente';\n\nconst text = `⚠️ *DERIVACIÓN URGENTE A ASESOR HUMANO*\\n\\n` +\n  `📱 *WhatsApp:* ${lead.phone || data.conversation_id}\\n` +\n  `💬 *Motivo:* ${reason}\\n\\n` +\n  `👉 Por favor responder desde la app de WhatsApp o desde el Panel CRM SerStorm.`;\n\nreturn [{ json: { text, lead, event: 'human_handoff' } }];"
+      },
+      "id": "5",
+      "name": "Formatear Derivación a Humano",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [720, 420]
+    }
+  ],
+  "connections": {
+    "Webhook SerStorm Worker": {
+      "main": [
+        [
+          {
+            "node": "Switch Evento",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Switch Evento": {
+      "main": [
+        [
+          {
+            "node": "Formatear Lead Calificado",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Formatear Auditoría Agendada",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Formatear Derivación a Humano",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  }
+}
