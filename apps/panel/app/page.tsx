@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { Sidebar } from '@/components/Sidebar';
 import { sendMessage, toggleAi, toggleAgentPaused, getConversations, getMessages, getLead, getAgency } from './actions';
 import { supabase } from '@/lib/supabase';
-import { SerstormConversation, SerstormMessage, SerstormLead, ENTITY_TYPE_LABELS, PIPELINE_STAGE_LABELS } from '@serstorm/shared';
+import { SerstormConversation, SerstormMessage, SerstormLead, ENTITY_TYPE_LABELS, PIPELINE_STAGE_LABELS } from '@/lib/shared';
 import { Bot, User, Send, CheckCheck, Clock, Sparkles, QrCode } from 'lucide-react';
 
 export default function InboxPage() {

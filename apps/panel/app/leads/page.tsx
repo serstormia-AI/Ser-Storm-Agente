@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { Sidebar } from '@/components/Sidebar';
 import { supabase } from '@/lib/supabase';
 import { updateLeadStage, toggleAgentPaused, getLeads } from '../actions';
-import { SerstormLead, PipelineStage, PIPELINE_STAGE_LABELS, ENTITY_TYPE_LABELS } from '@serstorm/shared';
+import { SerstormLead, PipelineStage, PIPELINE_STAGE_LABELS, ENTITY_TYPE_LABELS } from '@/lib/shared';
 import { Building2, DollarSign, CalendarCheck, Phone, ArrowRight } from 'lucide-react';
 
 const STAGES: PipelineStage[] = [

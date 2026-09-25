@@ -1,7 +1,7 @@
 'use server';
 
 import { createClient } from '@supabase/supabase-js';
-import { PipelineStage, SerstormConversation, SerstormMessage, SerstormLead } from '@serstorm/shared';
+import { PipelineStage, SerstormConversation, SerstormMessage, SerstormLead } from '@/lib/shared';
 
 const supabaseUrl =
   process.env.NEXT_PUBLIC_SUPABASE_URL ||
