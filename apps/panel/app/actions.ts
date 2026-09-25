@@ -180,3 +180,27 @@ export async function updateBrain(agencyId: string, fields: {
   if (error) return { success: false, error: error.message };
   return { success: true };
 }
+
+export async function requestQrCode() {
+  const { data: ag } = await supabaseAdmin
+    .from('agencies')
+    .select('business_hours')
+    .eq('slug', 'serstorm')
+    .single();
+
+  const currentBh = ag?.business_hours || {};
+  await supabaseAdmin
+    .from('agencies')
+    .update({
+      business_hours: {
+        ...currentBh,
+        reset_auth: true,
+        whatsapp_qr: null,
+        connection_status: 'qr_pending',
+      },
+    })
+    .eq('slug', 'serstorm');
+
+  return { success: true };
+}
+

@@ -54,6 +54,33 @@ async function startBaileysWorker() {
   await resolveAgency();
 
   const authDir = path.resolve(process.cwd(), 'auth', AGENCY_SLUG);
+
+  // Check if reset_auth was requested by the CRM panel
+  const { data: agCheck } = await supabase
+    .from('agencies')
+    .select('business_hours')
+    .eq('id', agencyId)
+    .single();
+
+  if (agCheck?.business_hours?.reset_auth) {
+    console.log('[Worker] 🔄 Flag reset_auth activo: limpiando credenciales para nuevo QR...');
+    if (fs.existsSync(authDir)) {
+      fs.rmSync(authDir, { recursive: true, force: true });
+    }
+    const currentBh = agCheck.business_hours || {};
+    delete currentBh.reset_auth;
+    await supabase
+      .from('agencies')
+      .update({
+        business_hours: {
+          ...currentBh,
+          whatsapp_qr: null,
+          connection_status: 'qr_pending',
+        },
+      })
+      .eq('id', agencyId);
+  }
+
   if (!fs.existsSync(authDir)) {
     fs.mkdirSync(authDir, { recursive: true });
   }
@@ -329,6 +356,43 @@ async function startBaileysWorker() {
       }
     }
   });
+
+  // Check every 3 seconds for reset_auth request from CRM panel
+  const resetCheckInterval = setInterval(async () => {
+    try {
+      const { data: ag } = await supabase
+        .from('agencies')
+        .select('business_hours')
+        .eq('id', agencyId)
+        .single();
+
+      if (ag?.business_hours?.reset_auth) {
+        console.log('[Worker] 🔄 Solicitud de nuevo QR recibida desde el CRM Panel.');
+        clearInterval(resetCheckInterval);
+        const currentBh = ag.business_hours || {};
+        delete currentBh.reset_auth;
+        await supabase
+          .from('agencies')
+          .update({
+            business_hours: {
+              ...currentBh,
+              whatsapp_qr: null,
+              connection_status: 'qr_pending',
+            },
+          })
+          .eq('id', agencyId);
+
+        try {
+          sock.end(undefined);
+        } catch (_) {}
+
+        if (fs.existsSync(authDir)) {
+          fs.rmSync(authDir, { recursive: true, force: true });
+        }
+        setTimeout(startBaileysWorker, 1500);
+      }
+    } catch (_) {}
+  }, 3000);
 
   // Outbound Dispatch Loop (Polls every 3 seconds)
   setInterval(async () => {

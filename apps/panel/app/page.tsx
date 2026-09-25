@@ -2,10 +2,10 @@
 
 import { useState, useEffect } from 'react';
 import { Sidebar } from '@/components/Sidebar';
-import { sendMessage, toggleAi, toggleAgentPaused, getConversations, getMessages, getLead, getAgency } from './actions';
+import { sendMessage, toggleAi, toggleAgentPaused, getConversations, getMessages, getLead, getAgency, requestQrCode } from './actions';
 import { supabase } from '@/lib/supabase';
 import { SerstormConversation, SerstormMessage, SerstormLead, ENTITY_TYPE_LABELS, PIPELINE_STAGE_LABELS } from '@/lib/shared';
-import { Bot, User, Send, CheckCheck, Clock, Sparkles, QrCode } from 'lucide-react';
+import { Bot, User, Send, CheckCheck, Clock, Sparkles, QrCode, RefreshCw } from 'lucide-react';
 
 export default function InboxPage() {
   const [conversations, setConversations] = useState<SerstormConversation[]>([]);
@@ -103,6 +103,8 @@ export default function InboxPage() {
     await toggleAi(selectedConv.id, newStatus);
   };
 
+  const [requestingQr, setRequestingQr] = useState(false);
+
   const handleTogglePause = async () => {
     const newStatus = !agentPaused;
     setAgentPaused(newStatus);
@@ -112,17 +114,30 @@ export default function InboxPage() {
   const connectionStatus = agency?.connection_status || agency?.business_hours?.connection_status || 'disconnected';
   const qrCode = agency?.qr_code || agency?.business_hours?.whatsapp_qr;
 
+  const handleOpenOrRequestQr = async () => {
+    setShowQrModal(true);
+    if (!qrCode || connectionStatus === 'disconnected') {
+      setRequestingQr(true);
+      await requestQrCode();
+      setTimeout(async () => {
+        const ag = await getAgency('serstorm');
+        if (ag) setAgency(ag);
+        setRequestingQr(false);
+      }, 3000);
+    }
+  };
+
   return (
     <div className="flex h-screen bg-slate-950 overflow-hidden relative">
       <Sidebar
         agentPaused={agentPaused}
         onTogglePause={handleTogglePause}
         connectionStatus={connectionStatus}
-        onOpenQrModal={() => setShowQrModal(true)}
+        onOpenQrModal={handleOpenOrRequestQr}
       />
 
-      {/* WhatsApp QR Modal Overlay if QR is pending */}
-      {connectionStatus === 'qr_pending' && qrCode && showQrModal && (
+      {/* WhatsApp QR Modal Overlay */}
+      {connectionStatus !== 'connected' && showQrModal && (
         <div className="fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-4">
           <div className="bg-slate-900 border border-indigo-500/40 rounded-2xl max-w-md w-full p-6 text-center shadow-2xl space-y-4">
             <div className="w-12 h-12 bg-indigo-600/20 text-indigo-400 rounded-full flex items-center justify-center mx-auto border border-indigo-500/30">
@@ -135,18 +150,47 @@ export default function InboxPage() {
               </p>
             </div>
 
-            <div className="bg-white p-3 rounded-2xl inline-block shadow-inner mx-auto">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={qrCode}
-                alt="Código QR de WhatsApp"
-                className="w-64 h-64 mx-auto rounded-lg"
-              />
-            </div>
-
-            <p className="text-[11px] text-indigo-300 animate-pulse font-medium">
-              ⏳ Esperando escaneo... (Esta pantalla se cerrará sola al conectar).
-            </p>
+            {qrCode && !requestingQr ? (
+              <div className="space-y-3">
+                <div className="bg-white p-3 rounded-2xl inline-block shadow-inner mx-auto">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={qrCode}
+                    alt="Código QR de WhatsApp"
+                    className="w-64 h-64 mx-auto rounded-lg"
+                  />
+                </div>
+                <p className="text-[11px] text-indigo-300 animate-pulse font-medium">
+                  ⏳ Esperando escaneo... (Esta pantalla se cerrará sola al conectar).
+                </p>
+                <div>
+                  <button
+                    type="button"
+                    onClick={handleOpenOrRequestQr}
+                    className="inline-flex items-center space-x-1.5 text-xs text-slate-400 hover:text-indigo-300 bg-slate-800/80 hover:bg-slate-800 px-3 py-1.5 rounded-lg transition-colors border border-slate-700/60"
+                  >
+                    <RefreshCw className="w-3.5 h-3.5" />
+                    <span>Regenerar QR si expiró</span>
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="py-8 space-y-3 bg-slate-950/40 rounded-2xl border border-slate-800 p-6">
+                <div className="w-10 h-10 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin mx-auto" />
+                <p className="text-sm font-semibold text-slate-200">Generando código QR...</p>
+                <p className="text-xs text-slate-400 max-w-xs mx-auto">
+                  Conectando con el servidor VPS para emitir la sesión de Baileys. Aguardá unos segundos...
+                </p>
+                <button
+                  type="button"
+                  onClick={handleOpenOrRequestQr}
+                  className="mt-2 text-xs px-3 py-1.5 bg-indigo-600/30 hover:bg-indigo-600/50 text-indigo-300 rounded-lg border border-indigo-500/40 inline-flex items-center space-x-1.5"
+                >
+                  <RefreshCw className="w-3.5 h-3.5" />
+                  <span>Reintentar solicitud</span>
+                </button>
+              </div>
+            )}
 
             <button
               type="button"
@@ -225,20 +269,15 @@ export default function InboxPage() {
                     <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
                     <span>WhatsApp Conectado (24/7)</span>
                   </span>
-                ) : connectionStatus === 'qr_pending' ? (
+                ) : (
                   <button
                     type="button"
-                    onClick={() => setShowQrModal(true)}
+                    onClick={handleOpenOrRequestQr}
                     className="flex items-center space-x-1.5 text-xs text-amber-400 bg-amber-950/60 border border-amber-800/40 px-2.5 py-1 rounded-full hover:bg-amber-900/40 transition-colors"
                   >
                     <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
-                    <span>Escanear Código QR</span>
+                    <span>{qrCode ? 'Escanear Código QR' : '📱 Vincular WhatsApp (QR)'}</span>
                   </button>
-                ) : (
-                  <span className="flex items-center space-x-1.5 text-xs text-slate-400 bg-slate-800/60 border border-slate-700/40 px-2.5 py-1 rounded-full">
-                    <span className="w-2 h-2 rounded-full bg-slate-500" />
-                    <span>WhatsApp Inactivo</span>
-                  </span>
                 )}
 
                 <button
