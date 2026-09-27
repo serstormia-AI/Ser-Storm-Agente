@@ -6,7 +6,7 @@ import { PipelineStage, SerstormConversation, SerstormMessage, SerstormLead, Cam
 const supabaseUrl =
   process.env.NEXT_PUBLIC_SUPABASE_URL ||
   process.env.SUPABASE_URL ||
-  'https://placeholder-serstorm.supabase.co';
+  'https://oaipqsrupiwkqvtcuwka.supabase.co';
 
 const serviceRoleKey =
   process.env.SUPABASE_SERVICE_ROLE_KEY ||
