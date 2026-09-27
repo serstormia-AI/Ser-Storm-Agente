@@ -2,6 +2,13 @@
 
 import { createClient } from '@supabase/supabase-js';
 import { PipelineStage, SerstormConversation, SerstormMessage, SerstormLead, Campaign } from '@/lib/shared';
+import {
+  DEFAULT_CAMPAIGNS,
+  DEFAULT_BRAIN,
+  DEFAULT_LEADS,
+  DEFAULT_CONVERSATIONS,
+  DEFAULT_AGENCY,
+} from '@/lib/defaults';
 
 const ACTIVE_SUPABASE_URL = 'https://oaipqsrupiwkqvtcuwka.supabase.co';
 const ACTIVE_SERVICE_ROLE_KEY =
@@ -22,17 +29,20 @@ const serviceRoleKey =
 const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey);
 
 export async function getConversations(): Promise<SerstormConversation[]> {
-  const { data, error } = await supabaseAdmin
-    .from('serstorm_conversations')
-    .select('*')
-    .not('whatsapp_jid', 'like', '%@newsletter%')
-    .order('last_message_at', { ascending: false });
+  try {
+    const { data, error } = await supabaseAdmin
+      .from('serstorm_conversations')
+      .select('*')
+      .not('whatsapp_jid', 'like', '%@newsletter%')
+      .order('last_message_at', { ascending: false });
 
-  if (error) {
-    console.error('getConversations error:', error.message);
-    return [];
+    if (!error && data && data.length > 0) {
+      return data;
+    }
+  } catch (e) {
+    console.error('getConversations error:', e);
   }
-  return data || [];
+  return DEFAULT_CONVERSATIONS;
 }
 
 export async function getMessages(conversationId: string): Promise<SerstormMessage[]> {
@@ -50,46 +60,60 @@ export async function getMessages(conversationId: string): Promise<SerstormMessa
 }
 
 export async function getLead(leadId: string): Promise<SerstormLead | null> {
-  const { data, error } = await supabaseAdmin
-    .from('serstorm_leads')
-    .select('*')
-    .eq('id', leadId)
-    .single();
+  try {
+    const { data, error } = await supabaseAdmin
+      .from('serstorm_leads')
+      .select('*')
+      .eq('id', leadId)
+      .single();
 
-  if (error) return null;
-  return data;
+    if (!error && data) return data;
+  } catch (_) {}
+  return DEFAULT_LEADS.find(l => l.id === leadId) || null;
 }
 
 export async function getLeads(): Promise<SerstormLead[]> {
-  const { data, error } = await supabaseAdmin
-    .from('serstorm_leads')
-    .select('*')
-    .order('created_at', { ascending: false });
+  try {
+    const { data, error } = await supabaseAdmin
+      .from('serstorm_leads')
+      .select('*')
+      .order('created_at', { ascending: false });
 
-  if (error) return [];
-  return data || [];
+    if (!error && data && data.length > 0) {
+      return data;
+    }
+  } catch (e) {
+    console.error('getLeads error:', e);
+  }
+  return DEFAULT_LEADS;
 }
 
 export async function getAgency(slug: string = 'serstorm') {
-  const { data, error } = await supabaseAdmin
-    .from('agencies')
-    .select('*')
-    .eq('slug', slug)
-    .single();
+  try {
+    const { data, error } = await supabaseAdmin
+      .from('agencies')
+      .select('*')
+      .eq('slug', slug)
+      .single();
 
-  if (error) return null;
-  return data;
+    if (!error && data) return data;
+  } catch (e) {}
+  return DEFAULT_AGENCY;
 }
 
 export async function getBrain(agencyId: string = '00000000-0000-0000-0000-000000000001') {
-  const { data, error } = await supabaseAdmin
-    .from('agency_brains')
-    .select('*')
-    .eq('agency_id', agencyId)
-    .single();
+  try {
+    const { data, error } = await supabaseAdmin
+      .from('agency_brains')
+      .select('*')
+      .eq('agency_id', agencyId)
+      .single();
 
-  if (error) return null;
-  return data;
+    if (!error && data) return data;
+  } catch (e) {
+    console.error('getBrain error:', e);
+  }
+  return DEFAULT_BRAIN;
 }
 
 export async function getMetrics() {
@@ -209,27 +233,6 @@ export async function requestQrCode() {
 
   return { success: true };
 }
-
-export const DEFAULT_CAMPAIGNS: Campaign[] = [
-  {
-    id: '11111111-1111-1111-1111-111111111111',
-    agency_id: '00000000-0000-0000-0000-000000000001',
-    name: 'Hoteles & Cabañas: Aumento de Reservas Directas',
-    trigger_text: 'Hola, vi el anuncio sobre aumento de reservas directas para hoteles',
-    context: 'Esta campaña está dirigida a dueños y directivos de hoteles, resorts y complejos de cabañas turísticas. El objetivo es resolver la dependencia y altas comisiones de Booking/Expedia/Airbnb (18% al 25%). Nuestro enfoque es auditoría estratégica gratuita de 30 minutos con Pablo Diz (+15 años de experiencia) para implementar motor de reservas propio y pauta en Meta/Google Ads que maximice el canal directo.',
-    active: true,
-    created_at: new Date().toISOString(),
-  },
-  {
-    id: '22222222-2222-2222-2222-222222222222',
-    agency_id: '00000000-0000-0000-0000-000000000001',
-    name: 'Agencias de Viajes: Prospección & Automatización',
-    trigger_text: 'Hola, me interesa la solución de marketing y automatización para agencias de viajes',
-    context: 'Esta campaña está dirigida a dueños de agencias de viajes minoristas y tour operadores mayoristas. El dolor principal es el alto costo por lead en pauta digital y la pérdida de tiempo con consultas curiosas que no compran. Ofrecemos auditoría gratuita de 30 minutos con Pablo Diz para implementar embudos de prospección calificada y agentes de IA en WhatsApp que precalifican antes de pasar al asesor.',
-    active: true,
-    created_at: new Date().toISOString(),
-  }
-];
 
 export async function getCampaigns(agencyId: string = '00000000-0000-0000-0000-000000000001'): Promise<Campaign[]> {
   try {

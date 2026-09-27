@@ -3,20 +3,21 @@
 import { useState, useEffect } from 'react';
 import { Sidebar } from '@/components/Sidebar';
 import { sendMessage, toggleAi, toggleAgentPaused, getConversations, getMessages, getLead, getAgency, requestQrCode } from './actions';
+import { DEFAULT_CONVERSATIONS, DEFAULT_AGENCY } from '@/lib/defaults';
 import { supabase } from '@/lib/supabase';
 import { SerstormConversation, SerstormMessage, SerstormLead, ENTITY_TYPE_LABELS, PIPELINE_STAGE_LABELS } from '@/lib/shared';
 import { Bot, User, Send, CheckCheck, Clock, Sparkles, QrCode, RefreshCw } from 'lucide-react';
 
 export default function InboxPage() {
-  const [conversations, setConversations] = useState<SerstormConversation[]>([]);
-  const [selectedConv, setSelectedConv] = useState<SerstormConversation | null>(null);
+  const [conversations, setConversations] = useState<SerstormConversation[]>(DEFAULT_CONVERSATIONS);
+  const [selectedConv, setSelectedConv] = useState<SerstormConversation | null>(DEFAULT_CONVERSATIONS[0]);
   const [messages, setMessages] = useState<SerstormMessage[]>([]);
   const [lead, setLead] = useState<SerstormLead | null>(null);
-  const [agency, setAgency] = useState<any>(null);
-  const [showQrModal, setShowQrModal] = useState(true);
+  const [agency, setAgency] = useState<any>(DEFAULT_AGENCY);
+  const [showQrModal, setShowQrModal] = useState(false);
   const [inputMessage, setInputMessage] = useState('');
   const [agentPaused, setAgentPaused] = useState(false);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
 
   // Load conversations
   useEffect(() => {

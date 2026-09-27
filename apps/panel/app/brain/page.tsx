@@ -4,14 +4,15 @@ import { useState, useEffect } from 'react';
 import { Sidebar } from '@/components/Sidebar';
 import { supabase } from '@/lib/supabase';
 import { updateBrain, getBrain } from '../actions';
+import { DEFAULT_BRAIN } from '@/lib/defaults';
 import { Save, CheckCircle2 } from 'lucide-react';
 
 export default function BrainEditorPage() {
-  const [content, setContent] = useState('');
-  const [services, setServices] = useState('');
-  const [tone, setTone] = useState('');
-  const [policies, setPolicies] = useState('');
-  const [handoffRules, setHandoffRules] = useState('');
+  const [content, setContent] = useState(DEFAULT_BRAIN.content);
+  const [services, setServices] = useState(DEFAULT_BRAIN.services);
+  const [tone, setTone] = useState(DEFAULT_BRAIN.tone);
+  const [policies, setPolicies] = useState(DEFAULT_BRAIN.policies);
+  const [handoffRules, setHandoffRules] = useState(DEFAULT_BRAIN.handoff_rules);
   const [saved, setSaved] = useState(false);
   const [saving, setSaving] = useState(false);
 
@@ -19,11 +20,11 @@ export default function BrainEditorPage() {
     async function loadBrain() {
       const data = await getBrain('00000000-0000-0000-0000-000000000001');
       if (data) {
-        setContent(data.content || '');
-        setServices(data.services || '');
-        setTone(data.tone || '');
-        setPolicies(data.policies || '');
-        setHandoffRules(data.handoff_rules || '');
+        setContent(data.content || DEFAULT_BRAIN.content);
+        setServices(data.services || DEFAULT_BRAIN.services);
+        setTone(data.tone || DEFAULT_BRAIN.tone);
+        setPolicies(data.policies || DEFAULT_BRAIN.policies);
+        setHandoffRules(data.handoff_rules || DEFAULT_BRAIN.handoff_rules);
       }
     }
     loadBrain();

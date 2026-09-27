@@ -3,15 +3,16 @@
 import { useState, useEffect } from 'react';
 import { Sidebar } from '@/components/Sidebar';
 import { getCampaigns, createCampaign, updateCampaign, toggleCampaignActive, deleteCampaign, toggleAgentPaused, getAgency } from '../actions';
+import { DEFAULT_CAMPAIGNS } from '@/lib/defaults';
 import { Campaign } from '@/lib/shared';
 import { Megaphone, Plus, Trash2, Edit3, Power, Zap, AlertTriangle, CheckCircle2, Clock } from 'lucide-react';
 
 const PLACEHOLDER_RE = /\[(COMPLETAR|CONFIRMAR)\b/i;
 
 export default function CampaignsPage() {
-  const [campaigns, setCampaigns] = useState<Campaign[]>([]);
+  const [campaigns, setCampaigns] = useState<Campaign[]>(DEFAULT_CAMPAIGNS);
   const [agentPaused, setAgentPaused] = useState(false);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [editingCampaignId, setEditingCampaignId] = useState<string | null>(null);
 

@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { Sidebar } from '@/components/Sidebar';
 import { supabase } from '@/lib/supabase';
 import { updateLeadStage, toggleAgentPaused, getLeads } from '../actions';
+import { DEFAULT_LEADS } from '@/lib/defaults';
 import { SerstormLead, PipelineStage, PIPELINE_STAGE_LABELS, ENTITY_TYPE_LABELS } from '@/lib/shared';
 import { Building2, DollarSign, CalendarCheck, Phone, ArrowRight } from 'lucide-react';
 
@@ -17,9 +18,9 @@ const STAGES: PipelineStage[] = [
 ];
 
 export default function LeadsPipelinePage() {
-  const [leads, setLeads] = useState<SerstormLead[]>([]);
+  const [leads, setLeads] = useState<SerstormLead[]>(DEFAULT_LEADS);
   const [agentPaused, setAgentPaused] = useState(false);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
 
   async function loadLeads() {
     setLoading(true);
