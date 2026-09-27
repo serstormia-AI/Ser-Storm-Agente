@@ -11,7 +11,7 @@ const supabaseUrl =
 const serviceRoleKey =
   process.env.SUPABASE_SERVICE_ROLE_KEY ||
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
-  'placeholder-service-key';
+  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9haXBxc3J1cGl3a3F2dGN1d2thIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc5MDM0NjY3MSwiZXhwIjoyMTA1OTIyNjcxfQ.1QVwA7TB_OvJhmC3wzN139SuvChkyYTZl6ArnDGKcbk';
 
 const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey);
 
