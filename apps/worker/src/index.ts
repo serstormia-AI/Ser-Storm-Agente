@@ -308,19 +308,34 @@ async function startBaileysWorker() {
           console.log(`[Campaign Match] Nuevo lead vinculado a campaña ${matchedCampaignId}`);
         }
 
-        const { data: newConv } = await supabase
+        const convPayload: any = {
+          agency_id: agencyId,
+          whatsapp_jid: jid,
+          contact_name: msg.pushName || null,
+          lead_id: newLead?.id || null,
+          ai_enabled: true,
+          last_message_at: new Date().toISOString(),
+        };
+
+        if (matchedCampaignId) {
+          convPayload.campaign_id = matchedCampaignId;
+        }
+
+        let { data: newConv, error: insertErr } = await supabase
           .from('serstorm_conversations')
-          .insert({
-            agency_id: agencyId,
-            whatsapp_jid: jid,
-            contact_name: msg.pushName || null,
-            lead_id: newLead?.id || null,
-            campaign_id: matchedCampaignId || null,
-            ai_enabled: true,
-            last_message_at: new Date().toISOString(),
-          })
+          .insert(convPayload)
           .select()
           .single();
+
+        if (insertErr && insertErr.message?.includes('campaign_id')) {
+          delete convPayload.campaign_id;
+          const { data: fallbackConv } = await supabase
+            .from('serstorm_conversations')
+            .insert(convPayload)
+            .select()
+            .single();
+          newConv = fallbackConv;
+        }
 
         conv = newConv;
       } else {
@@ -333,14 +348,26 @@ async function startBaileysWorker() {
           }
         }
 
-        await supabase
+        const updatePayload: any = {
+          last_message_at: new Date().toISOString(),
+          contact_name: msg.pushName || conv.contact_name,
+        };
+        if (updatedCampaignId) {
+          updatePayload.campaign_id = updatedCampaignId;
+        }
+
+        const { error: updateErr } = await supabase
           .from('serstorm_conversations')
-          .update({
-            last_message_at: new Date().toISOString(),
-            contact_name: msg.pushName || conv.contact_name,
-            campaign_id: updatedCampaignId,
-          })
+          .update(updatePayload)
           .eq('id', conv.id);
+
+        if (updateErr && updateErr.message?.includes('campaign_id')) {
+          delete updatePayload.campaign_id;
+          await supabase
+            .from('serstorm_conversations')
+            .update(updatePayload)
+            .eq('id', conv.id);
+        }
 
         conv.campaign_id = updatedCampaignId;
       }
