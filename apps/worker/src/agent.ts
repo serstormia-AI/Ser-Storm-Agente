@@ -11,7 +11,12 @@ dotenv.config({ path: path.resolve(process.cwd(), '.env') });
 dotenv.config({ path: path.resolve(__dirname, '../../../.env') });
 dotenv.config({ path: path.resolve(__dirname, '../../.env') });
 
-const MODEL_NAME = process.env.ANTHROPIC_MODEL || 'claude-sonnet-5';
+let rawModel = (process.env.ANTHROPIC_MODEL || 'claude-sonnet-5').trim();
+// Safety guard: if deprecated Claude Haiku 3 is configured, auto-upgrade to Claude Haiku 4.5
+if (rawModel.includes('claude-3-haiku')) {
+  rawModel = 'claude-haiku-4-5-20251001';
+}
+const MODEL_NAME = rawModel;
 
 interface RunAgentParams {
   supabase: SupabaseClient;
