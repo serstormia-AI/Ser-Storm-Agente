@@ -1,7 +1,7 @@
 'use server';
 
 import { createClient } from '@supabase/supabase-js';
-import { PipelineStage, SerstormConversation, SerstormMessage, SerstormLead } from '@/lib/shared';
+import { PipelineStage, SerstormConversation, SerstormMessage, SerstormLead, Campaign } from '@/lib/shared';
 
 const supabaseUrl =
   process.env.NEXT_PUBLIC_SUPABASE_URL ||
@@ -203,4 +203,180 @@ export async function requestQrCode() {
 
   return { success: true };
 }
+
+export const DEFAULT_CAMPAIGNS: Campaign[] = [
+  {
+    id: '11111111-1111-1111-1111-111111111111',
+    agency_id: '00000000-0000-0000-0000-000000000001',
+    name: 'Hoteles & Cabañas: Aumento de Reservas Directas',
+    trigger_text: 'Hola, vi el anuncio sobre aumento de reservas directas para hoteles',
+    context: 'Esta campaña está dirigida a dueños y directivos de hoteles, resorts y complejos de cabañas turísticas. El objetivo es resolver la dependencia y altas comisiones de Booking/Expedia/Airbnb (18% al 25%). Nuestro enfoque es auditoría estratégica gratuita de 30 minutos con Pablo Diz (+15 años de experiencia) para implementar motor de reservas propio y pauta en Meta/Google Ads que maximice el canal directo.',
+    active: true,
+    created_at: new Date().toISOString(),
+  },
+  {
+    id: '22222222-2222-2222-2222-222222222222',
+    agency_id: '00000000-0000-0000-0000-000000000001',
+    name: 'Agencias de Viajes: Prospección & Automatización',
+    trigger_text: 'Hola, me interesa la solución de marketing y automatización para agencias de viajes',
+    context: 'Esta campaña está dirigida a dueños de agencias de viajes minoristas y tour operadores mayoristas. El dolor principal es el alto costo por lead en pauta digital y la pérdida de tiempo con consultas curiosas que no compran. Ofrecemos auditoría gratuita de 30 minutos con Pablo Diz para implementar embudos de prospección calificada y agentes de IA en WhatsApp que precalifican antes de pasar al asesor.',
+    active: true,
+    created_at: new Date().toISOString(),
+  }
+];
+
+export async function getCampaigns(agencyId: string = '00000000-0000-0000-0000-000000000001'): Promise<Campaign[]> {
+  try {
+    const { data, error } = await supabaseAdmin
+      .from('campaigns')
+      .select('*')
+      .eq('agency_id', agencyId)
+      .order('created_at', { ascending: false });
+
+    if (!error && data && data.length > 0) {
+      return data;
+    }
+  } catch (_) {}
+
+  // Fallback to agencies.business_hours.campaigns
+  const { data: ag } = await supabaseAdmin
+    .from('agencies')
+    .select('business_hours')
+    .eq('id', agencyId)
+    .single();
+
+  const bh = ag?.business_hours || {};
+  if (!bh.campaigns || bh.campaigns.length === 0) {
+    await supabaseAdmin
+      .from('agencies')
+      .update({
+        business_hours: { ...bh, campaigns: DEFAULT_CAMPAIGNS }
+      })
+      .eq('id', agencyId);
+    return DEFAULT_CAMPAIGNS;
+  }
+
+  return bh.campaigns || [];
+}
+
+export async function createCampaign(data: {
+  name: string;
+  trigger_text: string;
+  context: string;
+  agency_id?: string;
+}) {
+  const agencyId = data.agency_id || '00000000-0000-0000-0000-000000000001';
+  const newCamp: Campaign = {
+    id: crypto.randomUUID(),
+    agency_id: agencyId,
+    name: data.name.trim(),
+    trigger_text: data.trigger_text.trim(),
+    context: data.context.trim(),
+    active: true,
+    created_at: new Date().toISOString(),
+  };
+
+  try {
+    const { error } = await supabaseAdmin
+      .from('campaigns')
+      .insert(newCamp);
+    if (!error) return { success: true, campaign: newCamp };
+  } catch (_) {}
+
+  const { data: ag } = await supabaseAdmin
+    .from('agencies')
+    .select('business_hours')
+    .eq('id', agencyId)
+    .single();
+
+  const bh = ag?.business_hours || {};
+  const campaigns: Campaign[] = bh.campaigns || [];
+  campaigns.unshift(newCamp);
+
+  await supabaseAdmin
+    .from('agencies')
+    .update({
+      business_hours: { ...bh, campaigns }
+    })
+    .eq('id', agencyId);
+
+  return { success: true, campaign: newCamp };
+}
+
+export async function updateCampaign(
+  campaignId: string,
+  fields: { name?: string; trigger_text?: string; context?: string; active?: boolean },
+  agencyId: string = '00000000-0000-0000-0000-000000000001'
+) {
+  try {
+    const { error } = await supabaseAdmin
+      .from('campaigns')
+      .update(fields)
+      .eq('id', campaignId);
+    if (!error) return { success: true };
+  } catch (_) {}
+
+  const { data: ag } = await supabaseAdmin
+    .from('agencies')
+    .select('business_hours')
+    .eq('id', agencyId)
+    .single();
+
+  const bh = ag?.business_hours || {};
+  const campaigns: Campaign[] = (bh.campaigns || []).map((c: Campaign) => {
+    if (c.id === campaignId) {
+      return { ...c, ...fields };
+    }
+    return c;
+  });
+
+  await supabaseAdmin
+    .from('agencies')
+    .update({
+      business_hours: { ...bh, campaigns }
+    })
+    .eq('id', agencyId);
+
+  return { success: true };
+}
+
+export async function toggleCampaignActive(
+  campaignId: string,
+  active: boolean,
+  agencyId: string = '00000000-0000-0000-0000-000000000001'
+) {
+  return updateCampaign(campaignId, { active }, agencyId);
+}
+
+export async function deleteCampaign(
+  campaignId: string,
+  agencyId: string = '00000000-0000-0000-0000-000000000001'
+) {
+  try {
+    const { error } = await supabaseAdmin
+      .from('campaigns')
+      .delete()
+      .eq('id', campaignId);
+    if (!error) return { success: true };
+  } catch (_) {}
+
+  const { data: ag } = await supabaseAdmin
+    .from('agencies')
+    .select('business_hours')
+    .eq('id', agencyId)
+    .single();
+
+  const bh = ag?.business_hours || {};
+  const campaigns: Campaign[] = (bh.campaigns || []).filter((c: Campaign) => c.id !== campaignId);
+
+  await supabaseAdmin
+    .from('agencies')
+    .update({
+      business_hours: { ...bh, campaigns }
+    })
+    .eq('id', agencyId);
+
+  return { success: true };
+}
+
 

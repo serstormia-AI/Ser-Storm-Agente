@@ -78,11 +78,26 @@ CREATE TABLE IF NOT EXISTS serstorm_leads (
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- 5. Conversations
+-- 5. Campaigns (Click-to-WhatsApp Ads with specific context)
+CREATE TABLE IF NOT EXISTS campaigns (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    agency_id UUID NOT NULL REFERENCES agencies(id) ON DELETE CASCADE,
+    name TEXT NOT NULL,
+    trigger_text TEXT NOT NULL,
+    context TEXT NOT NULL,
+    active BOOLEAN NOT NULL DEFAULT true,
+    attachment_path TEXT,
+    attachment_type TEXT,
+    attachment_filename TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- 6. Conversations
 CREATE TABLE IF NOT EXISTS serstorm_conversations (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     agency_id UUID NOT NULL REFERENCES agencies(id) ON DELETE CASCADE,
     lead_id UUID REFERENCES serstorm_leads(id) ON DELETE SET NULL,
+    campaign_id UUID REFERENCES campaigns(id) ON DELETE SET NULL,
     whatsapp_jid TEXT NOT NULL,
     contact_name TEXT,
     ai_enabled BOOLEAN DEFAULT TRUE,

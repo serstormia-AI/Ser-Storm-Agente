@@ -47,6 +47,34 @@ export async function runAgentTurn(params: RunAgentParams): Promise<string | nul
 
   const calendarUrl = agency?.audit_calendar_url || 'https://cal.com/serstorm/auditoria-estrategica';
 
+  // 1.5 Fetch Campaign Context if conversation came from Click-to-WhatsApp ad
+  let campaignContext = '';
+  if (conversation.campaign_id) {
+    let camp: any = null;
+    try {
+      const { data } = await supabase
+        .from('campaigns')
+        .select('*')
+        .eq('id', conversation.campaign_id)
+        .single();
+      camp = data;
+    } catch (_) {}
+
+    if (!camp && agency?.business_hours?.campaigns) {
+      camp = agency.business_hours.campaigns.find((c: any) => c.id === conversation.campaign_id);
+    }
+
+    if (camp) {
+      campaignContext = `
+CONTEXTO DE CAMPAÑA ADS ACTIVA ("${camp.name}"):
+Este prospecto escribió motivado por este anuncio específico:
+- Disparador: "${camp.trigger_text}"
+- Contexto y propuesta: ${camp.context}
+Usa este contexto puntual para asesorar con máxima precisión sobre esta oferta. Si el cliente pregunta algo fuera del tema de la campaña, ayúdalo igual con el conocimiento general de SerStorm sin derivar a humano.
+`.trim();
+    }
+  }
+
   // 2. Build System Prompt
   const systemPrompt = `
 Eres el Asistente Estratégico de Admisiones de SerStorm (https://serstorm.com/).
@@ -55,7 +83,7 @@ SerStorm es la agencia líder de marketing digital y tecnología especializada E
 MISIÓN:
 Conversar cordialmente con el prospecto turístico, comprender su negocio, validar si califica y agendar una Auditoría Estratégica Gratuita (30 minutos vía Google Meet) con Pablo Diz o su equipo.
 NO vendas servicios con precios fijos por chat. Cada plan se cotiza a medida tras la auditoría.
-
+${campaignContext ? `\n${campaignContext}\n` : ''}
 CONOCIMIENTO DE SERSTORM:
 - ${brain?.content || 'Marketing digital para hoteles, cabañas y agencias de viajes.'}
 - Servicios clave: ${brain?.services || 'Performance Ads (Meta & Google), SEO Turístico, Web de Alta Conversión, Bots de WhatsApp para Hoteles.'}

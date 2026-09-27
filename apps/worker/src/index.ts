@@ -50,6 +50,86 @@ async function resolveAgency(): Promise<void> {
   }
 }
 
+const TRIGGER_STOPWORDS = new Set([
+  'de', 'la', 'el', 'en', 'y', 'a', 'los', 'del', 'se', 'las', 'por', 'un', 'para',
+  'con', 'sin', 'sobre', 'que', 'mas', 'los', 'las', 'del', 'por', 'para', 'una', 'uno',
+  'hola', 'buenas', 'buenos', 'dias', 'tardes', 'noches',
+  'quiero', 'quisiera', 'queria', 'necesito', 'busco',
+  'interesa', 'interesado', 'interesada', 'interese',
+  'informacion', 'info', 'consulta', 'consultar', 'saber', 'precio', 'precios',
+  'promo', 'promocion', 'oferta', 'anuncio', 'vi', 'el', 'sobre'
+]);
+
+function normalizeWords(text: string): string[] {
+  return text
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .split(/\s+/)
+    .filter(Boolean);
+}
+
+function distinctiveWords(triggerText: string): string[] {
+  return [...new Set(normalizeWords(triggerText).filter((w) => w.length > 2 && !TRIGGER_STOPWORDS.has(w)))];
+}
+
+async function matchCampaign(
+  agencyId: string,
+  messageBody: string
+): Promise<string | null> {
+  let campaigns: any[] = [];
+  try {
+    const { data, error } = await supabase
+      .from('campaigns')
+      .select('id, trigger_text, active')
+      .eq('agency_id', agencyId)
+      .eq('active', true);
+
+    if (!error && data && data.length > 0) {
+      campaigns = data;
+    }
+  } catch (_) {}
+
+  if (campaigns.length === 0) {
+    const { data: ag } = await supabase
+      .from('agencies')
+      .select('business_hours')
+      .eq('id', agencyId)
+      .single();
+    campaigns = (ag?.business_hours?.campaigns || []).filter((c: any) => c.active !== false);
+  }
+
+  if (campaigns.length === 0) return null;
+
+  const bodyLower = messageBody.toLowerCase();
+  const bodyWords = new Set(normalizeWords(messageBody));
+
+  const scored = campaigns
+    .map((c) => {
+      const own = distinctiveWords(c.trigger_text);
+      return {
+        id: c.id,
+        own,
+        hits: own.filter((w) => bodyWords.has(w)),
+        exact: bodyLower.includes(c.trigger_text.toLowerCase()),
+        triggerLength: c.trigger_text.length
+      };
+    })
+    .filter((c) => c.hits.length > 0 || c.exact)
+    .sort(
+      (a, b) =>
+        b.hits.length - a.hits.length ||
+        Number(b.exact) - Number(a.exact) ||
+        (b.own.length ? b.hits.length / b.own.length : 0) - (a.own.length ? a.hits.length / a.own.length : 0) ||
+        b.triggerLength - a.triggerLength
+    );
+
+  const best = scored[0];
+  if (!best) return null;
+  return best.id;
+}
+
 async function startBaileysWorker() {
   await resolveAgency();
 
@@ -223,6 +303,11 @@ async function startBaileysWorker() {
           .select()
           .single();
 
+        const matchedCampaignId = !isFromMe ? await matchCampaign(agencyId, content) : null;
+        if (matchedCampaignId) {
+          console.log(`[Campaign Match] Nuevo lead vinculado a campaña ${matchedCampaignId}`);
+        }
+
         const { data: newConv } = await supabase
           .from('serstorm_conversations')
           .insert({
@@ -230,6 +315,7 @@ async function startBaileysWorker() {
             whatsapp_jid: jid,
             contact_name: msg.pushName || null,
             lead_id: newLead?.id || null,
+            campaign_id: matchedCampaignId || null,
             ai_enabled: true,
             last_message_at: new Date().toISOString(),
           })
@@ -238,13 +324,25 @@ async function startBaileysWorker() {
 
         conv = newConv;
       } else {
+        let updatedCampaignId = conv.campaign_id;
+        if (!isFromMe && !conv.campaign_id) {
+          const matched = await matchCampaign(agencyId, content);
+          if (matched) {
+            updatedCampaignId = matched;
+            console.log(`[Campaign Match] Conversación existente vinculada a campaña ${matched}`);
+          }
+        }
+
         await supabase
           .from('serstorm_conversations')
           .update({
             last_message_at: new Date().toISOString(),
             contact_name: msg.pushName || conv.contact_name,
+            campaign_id: updatedCampaignId,
           })
           .eq('id', conv.id);
+
+        conv.campaign_id = updatedCampaignId;
       }
 
       // 2. Coexistence Check: If human operator sent message from phone

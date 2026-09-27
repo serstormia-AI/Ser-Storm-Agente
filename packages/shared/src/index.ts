@@ -51,6 +51,19 @@ export interface SerstormLead {
   assigned_advisor: string | null;
 }
 
+export interface Campaign {
+  id: string;
+  agency_id: string;
+  name: string;
+  trigger_text: string;
+  context: string;
+  active: boolean;
+  attachment_path?: string | null;
+  attachment_type?: 'image' | 'pdf' | null;
+  attachment_filename?: string | null;
+  created_at: string;
+}
+
 export interface SerstormConversation {
   id: string;
   lead_id: string | null;
@@ -59,6 +72,7 @@ export interface SerstormConversation {
   ai_enabled: boolean;
   agent_mode: AgentMode;
   agent_instructions: string | null;
+  campaign_id?: string | null;
   last_message_at: string;
   unread_count: number;
   assigned_to: string | null;

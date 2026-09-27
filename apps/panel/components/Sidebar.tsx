@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { MessageSquare, Users, Brain, BarChart3, AlertOctagon } from 'lucide-react';
+import { MessageSquare, Users, Brain, BarChart3, AlertOctagon, Megaphone } from 'lucide-react';
 
 interface SidebarProps {
   agentPaused: boolean;
@@ -17,6 +17,7 @@ export function Sidebar({ agentPaused, onTogglePause, connectionStatus, onOpenQr
   const links = [
     { href: '/', label: 'Bandeja de Entrada', icon: MessageSquare },
     { href: '/leads', label: 'Pipeline de Leads', icon: Users },
+    { href: '/campaigns', label: 'Campañas Ads', icon: Megaphone },
     { href: '/brain', label: 'Cerebro IA SerStorm', icon: Brain },
     { href: '/metrics', label: 'Métricas & Conversión', icon: BarChart3 },
   ];
