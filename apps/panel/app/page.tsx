@@ -21,7 +21,15 @@ export default function InboxPage() {
   // Load conversations
   useEffect(() => {
     async function loadData() {
-      const convs = await getConversations();
+      let convs = await getConversations();
+      if (!convs || convs.length === 0) {
+        const { data: directConvs } = await supabase
+          .from('serstorm_conversations')
+          .select('*')
+          .not('whatsapp_jid', 'like', '%@newsletter%')
+          .order('last_message_at', { ascending: false });
+        if (directConvs && directConvs.length > 0) convs = directConvs;
+      }
       if (convs && convs.length > 0) {
         setConversations(convs);
         if (!selectedConv) {

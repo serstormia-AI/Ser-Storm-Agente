@@ -22,9 +22,29 @@ export default function LeadsPipelinePage() {
   const [loading, setLoading] = useState(true);
 
   async function loadLeads() {
-    const data = await getLeads();
-    if (data) setLeads(data);
-    setLoading(false);
+    setLoading(true);
+    try {
+      let data = await getLeads();
+      if (!data || data.length === 0) {
+        // Fallback: direct Supabase query
+        const { data: directData, error } = await supabase
+          .from('serstorm_leads')
+          .select('*')
+          .order('created_at', { ascending: false });
+        if (directData && directData.length > 0) {
+          data = directData;
+        } else if (error) {
+          console.error('[Leads] direct query error:', error);
+        }
+      }
+      if (data && data.length > 0) {
+        setLeads(data);
+      }
+    } catch (err) {
+      console.error('[Leads] loadLeads caught error:', err);
+    } finally {
+      setLoading(false);
+    }
   }
 
   useEffect(() => {
