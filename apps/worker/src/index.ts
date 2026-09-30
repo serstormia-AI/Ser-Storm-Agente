@@ -31,8 +31,12 @@ if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
-// Memory stores for debounce & queues
+// Memory stores for debounce, queues & deduplication
 const debounceTimers = new Map<string, NodeJS.Timeout>();
+const inFlightMessageIds = new Set<string>();
+const recentlySentWaMsgIds = new Set<string>();
+const recentlySentContents = new Map<string, number>();
+const processedIncomingWaMsgIds = new Set<string>();
 let agencyId: string = '00000000-0000-0000-0000-000000000001';
 
 async function resolveAgency(): Promise<void> {
@@ -260,6 +264,18 @@ async function startBaileysWorker() {
       const isFromMe = !!msg.key.fromMe;
       const waMsgId = msg.key.id;
 
+      if (waMsgId) {
+        if (processedIncomingWaMsgIds.has(waMsgId)) {
+          console.log(`[Deduplication] Mensaje entrante ${waMsgId} ya procesado previamente. Ignorando.`);
+          continue;
+        }
+        processedIncomingWaMsgIds.add(waMsgId);
+        if (processedIncomingWaMsgIds.size > 1000) {
+          const oldest = processedIncomingWaMsgIds.values().next().value;
+          if (oldest) processedIncomingWaMsgIds.delete(oldest);
+        }
+      }
+
       // Extract message text or voice note
       let content = msg.message?.conversation ||
                     msg.message?.extendedTextMessage?.text ||
@@ -374,6 +390,19 @@ async function startBaileysWorker() {
 
       // 2. Coexistence Check: If human operator sent message from phone
       if (isFromMe) {
+        // Check if this is an echo of an outbound message already dispatched by our worker
+        const contentKey = `${jid}:${content.trim()}`;
+        const sentTimestamp = recentlySentContents.get(contentKey);
+        const isEchoOfOutbound =
+          (waMsgId && recentlySentWaMsgIds.has(waMsgId)) ||
+          (sentTimestamp && Date.now() - sentTimestamp < 25000);
+
+        if (isEchoOfOutbound) {
+          if (waMsgId) recentlySentWaMsgIds.delete(waMsgId);
+          console.log(`[Coexistence] Echo detectado de mensaje propio saliente en ${jid}. No se duplica en BD.`);
+          continue;
+        }
+
         console.log(`[Coexistence] Human operator replied from phone on ${jid}. Disabling AI.`);
         if (debounceTimers.has(jid)) {
           clearTimeout(debounceTimers.get(jid)!);
@@ -466,14 +495,25 @@ async function startBaileysWorker() {
           });
 
           if (replyText) {
-            await supabase.from('serstorm_messages').insert({
-              conversation_id: freshConv.id,
-              sender_type: 'ai',
-              author: 'SerStorm AI',
-              content: replyText,
-              simulate_typing: true,
-              status: 'pending',
-            });
+            const { data: existingPending } = await supabase
+              .from('serstorm_messages')
+              .select('id')
+              .eq('conversation_id', freshConv.id)
+              .eq('status', 'pending')
+              .limit(1);
+
+            if (!existingPending || existingPending.length === 0) {
+              await supabase.from('serstorm_messages').insert({
+                conversation_id: freshConv.id,
+                sender_type: 'ai',
+                author: 'SerStorm AI',
+                content: replyText,
+                simulate_typing: true,
+                status: 'pending',
+              });
+            } else {
+              console.log(`[Agent Skip Insert] Ya existe un mensaje pendiente para ${jid}. Evitando duplicación.`);
+            }
           }
         }, AGENT_DEBOUNCE_MS);
 
@@ -519,42 +559,87 @@ async function startBaileysWorker() {
     } catch (_) {}
   }, 3000);
 
-  // Outbound Dispatch Loop (Polls every 3 seconds)
-  setInterval(async () => {
+  // Outbound Dispatch Loop (Self-scheduling with lock and in-flight tracking to prevent duplicates)
+  let isDispatchingOutbound = false;
+
+  async function processOutboundQueue() {
+    if (isDispatchingOutbound) return;
+    isDispatchingOutbound = true;
+
     try {
-      const { data: pendingMessages } = await supabase
+      const { data: rawPending, error } = await supabase
         .from('serstorm_messages')
         .select('id, conversation_id, content, simulate_typing, serstorm_conversations!inner(whatsapp_jid)')
         .eq('status', 'pending')
+        .order('created_at', { ascending: true })
         .limit(5);
 
-      if (!pendingMessages || pendingMessages.length === 0) return;
+      if (error) {
+        console.error('[Outbound Error fetching pending messages]', error.message);
+        return;
+      }
+
+      const pendingMessages = (rawPending || []).filter((m: any) => !inFlightMessageIds.has(m.id));
 
       for (const msg of pendingMessages as any[]) {
         const targetJid = msg.serstorm_conversations?.whatsapp_jid;
         if (!targetJid) continue;
 
-        if (msg.simulate_typing) {
-          // Simulate presence typing (2 to 3.5s)
-          await sock.sendPresenceUpdate('composing', targetJid);
-          const delay = Math.min(3500, Math.max(1800, msg.content.length * 40));
-          await new Promise((r) => setTimeout(r, delay));
-          await sock.sendPresenceUpdate('paused', targetJid);
+        // Mark as in-flight immediately to prevent any concurrent processing
+        inFlightMessageIds.add(msg.id);
+
+        try {
+          if (msg.simulate_typing) {
+            // Simulate presence typing (1.8s to 3.5s)
+            await sock.sendPresenceUpdate('composing', targetJid);
+            const delay = Math.min(3500, Math.max(1800, msg.content.length * 40));
+            await new Promise((r) => setTimeout(r, delay));
+            await sock.sendPresenceUpdate('paused', targetJid);
+          }
+
+          const sentResult = await sock.sendMessage(targetJid, { text: msg.content });
+          const sentWaId = sentResult?.key?.id;
+
+          if (sentWaId) {
+            recentlySentWaMsgIds.add(sentWaId);
+            if (recentlySentWaMsgIds.size > 300) {
+              const oldest = recentlySentWaMsgIds.values().next().value;
+              if (oldest) recentlySentWaMsgIds.delete(oldest);
+            }
+          }
+
+          const contentKey = `${targetJid}:${msg.content.trim()}`;
+          recentlySentContents.set(contentKey, Date.now());
+
+          await supabase
+            .from('serstorm_messages')
+            .update({
+              status: 'sent',
+              ...(sentWaId ? { wa_message_id: sentWaId } : {}),
+            })
+            .eq('id', msg.id);
+
+          console.log(`[Outbound] Message sent to ${targetJid} (ID: ${msg.id})`);
+        } catch (sendErr: any) {
+          console.error(`[Outbound Error sending message ${msg.id}]`, sendErr.message);
+          await supabase
+            .from('serstorm_messages')
+            .update({ status: 'failed' })
+            .eq('id', msg.id);
+        } finally {
+          inFlightMessageIds.delete(msg.id);
         }
-
-        await sock.sendMessage(targetJid, { text: msg.content });
-
-        await supabase
-          .from('serstorm_messages')
-          .update({ status: 'sent' })
-          .eq('id', msg.id);
-
-        console.log(`[Outbound] Message sent to ${targetJid}`);
       }
     } catch (e: any) {
       console.error('[Outbound Error]', e.message);
+    } finally {
+      isDispatchingOutbound = false;
+      setTimeout(processOutboundQueue, 2500);
     }
-  }, 3000);
+  }
+
+  // Start Outbound Dispatch Loop
+  setTimeout(processOutboundQueue, 3000);
 
   // Followups Check Loop (Polls every 30 seconds)
   setInterval(async () => {

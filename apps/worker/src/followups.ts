@@ -1,6 +1,10 @@
 import { SupabaseClient } from '@supabase/supabase-js';
 
+let isProcessingFollowups = false;
+
 export async function processDueFollowups(supabase: SupabaseClient, agencyId: string): Promise<void> {
+  if (isProcessingFollowups) return;
+  isProcessingFollowups = true;
   try {
     const nowIso = new Date().toISOString();
     const { data: followups, error } = await supabase
@@ -38,5 +42,7 @@ export async function processDueFollowups(supabase: SupabaseClient, agencyId: st
     }
   } catch (err: any) {
     console.error('[Followups] Error processing followups:', err.message);
+  } finally {
+    isProcessingFollowups = false;
   }
 }

@@ -16,6 +16,7 @@ export default function InboxPage() {
   const [agency, setAgency] = useState<any>(DEFAULT_AGENCY);
   const [showQrModal, setShowQrModal] = useState(false);
   const [inputMessage, setInputMessage] = useState('');
+  const [sendingMessage, setSendingMessage] = useState(false);
   const [agentPaused, setAgentPaused] = useState(false);
   const [loading, setLoading] = useState(false);
 
@@ -81,10 +82,11 @@ export default function InboxPage() {
 
   const handleSend = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedConv || !inputMessage.trim()) return;
+    if (!selectedConv || !inputMessage.trim() || sendingMessage) return;
 
     const text = inputMessage.trim();
     setInputMessage('');
+    setSendingMessage(true);
 
     // Optimistic UI insert
     const tempMsg: SerstormMessage = {
@@ -99,9 +101,13 @@ export default function InboxPage() {
     };
     setMessages((prev) => [...prev, tempMsg]);
 
-    const res = await sendMessage(selectedConv.id, text);
-    if (res.success) {
-      setSelectedConv((prev) => (prev ? { ...prev, ai_enabled: false } : null));
+    try {
+      const res = await sendMessage(selectedConv.id, text);
+      if (res.success) {
+        setSelectedConv((prev) => (prev ? { ...prev, ai_enabled: false } : null));
+      }
+    } finally {
+      setSendingMessage(false);
     }
   };
 
@@ -365,7 +371,7 @@ export default function InboxPage() {
               />
               <button
                 type="submit"
-                disabled={!inputMessage.trim()}
+                disabled={!inputMessage.trim() || sendingMessage}
                 className="bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 text-white px-4 py-2.5 rounded-xl text-sm font-medium transition-all shadow-md shadow-indigo-600/30 flex items-center space-x-1"
               >
                 <span>Enviar</span>
